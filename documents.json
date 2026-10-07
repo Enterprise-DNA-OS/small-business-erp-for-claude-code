@@ -1,11 +1,117 @@
 [
   {
-    "name": "example",
-    "title": "TODO(author): the first document this industry must produce",
-    "for_each": "select gen_random_uuid() as id, 'Example' as name",
-    "file": "name",
+    "name": "sales-confirmation",
+    "title": "Sales order confirmation",
+    "for_each": "select id,code from orders where kind='sales' and status<>'cancelled'",
+    "file": "code",
     "sections": [
-      { "title": "Details", "sql": "select 'replace me' as item, $1::text as record_id" }
+      {
+        "title": "Order",
+        "note": "Draft for review. Amounts exclude GST; the tax invoice comes from your accounting ledger.",
+        "sql": "select code,partner as customer,reference as your_reference,warehouse as dispatch_from,status,due_on,total,(select currency from settings limit 1) as currency from v_orders where id=$1"
+      },
+      {
+        "title": "Lines",
+        "sql": "select l.line_no,i.code,i.name,i.uom,l.quantity,l.completed as shipped,l.unit_price,(l.quantity*l.unit_price)::numeric(14,2) as line_amount from order_lines l join items i on i.id=l.item_id where l.order_id=$1 order by l.line_no"
+      },
+      {
+        "title": "Batches shipped",
+        "note": "Keep this with your delivery records: it is what a recall traces.",
+        "sql": "select i.code as item,b.code as batch,b.expires_on as best_before,-sum(m.quantity)::numeric(14,3) as quantity from stock_moves m join order_lines l on l.id=m.line_id join batches b on b.id=m.batch_id join items i on i.id=b.item_id where l.order_id=$1 and m.kind='delivery' group by i.code,b.code,b.expires_on order by i.code,b.code"
+      }
+    ]
+  },
+  {
+    "name": "quote",
+    "title": "Quote",
+    "for_each": "select id,code from orders where kind='quote' and status in ('draft','open')",
+    "file": "code",
+    "sections": [
+      {
+        "title": "Quote",
+        "note": "Draft for review. Amounts exclude GST.",
+        "sql": "select code,partner as customer,reference,valid_until,due_on as delivery_from,total,(select currency from settings limit 1) as currency from v_orders where id=$1"
+      },
+      {
+        "title": "Lines",
+        "sql": "select l.line_no,i.code,i.name,i.uom,l.quantity,l.unit_price,(l.quantity*l.unit_price)::numeric(14,2) as line_amount from order_lines l join items i on i.id=l.item_id where l.order_id=$1 order by l.line_no"
+      }
+    ]
+  },
+  {
+    "name": "purchase-order",
+    "title": "Purchase order",
+    "for_each": "select id,code from orders where kind='purchase' and status<>'cancelled'",
+    "file": "code",
+    "sections": [
+      {
+        "title": "Order",
+        "note": "Draft for review. Amounts exclude GST. Please quote your lot number on every delivery.",
+        "sql": "select code,partner as supplier,warehouse as deliver_to,status,due_on,total,(select currency from settings limit 1) as currency from v_orders where id=$1"
+      },
+      {
+        "title": "Lines",
+        "sql": "select l.line_no,i.code,i.name,i.uom,l.quantity,l.completed as received,l.unit_price,(l.quantity*l.unit_price)::numeric(14,2) as line_amount from order_lines l join items i on i.id=l.item_id where l.order_id=$1 order by l.line_no"
+      }
+    ]
+  },
+  {
+    "name": "production-sheet",
+    "title": "Production sheet",
+    "for_each": "select id,code from production_orders where status in ('planned','released')",
+    "file": "code",
+    "sections": [
+      {
+        "title": "Run",
+        "note": "Record the batch number and the lots you actually used before the run is completed.",
+        "sql": "select p.code,i.code as item,i.name,w.code as warehouse,p.status,p.due_on,p.planned_qty,p.completed_qty,o.code as for_order from production_orders p join items i on i.id=p.item_id join warehouses w on w.id=p.warehouse_id left join orders o on o.id=p.for_order_id where p.id=$1"
+      },
+      {
+        "title": "Components to issue",
+        "sql": "select i.code as component,i.name,i.uom,n.remaining as quantity,coalesce(s.on_hand-s.blocked,0)::numeric(14,3) as available,greatest(n.remaining-coalesce(s.on_hand-s.blocked,0),0)::numeric(14,3) as short from v_component_needs n join items i on i.id=n.item_id left join v_stock s on s.item_id=n.item_id and s.warehouse_id=n.warehouse_id where n.production_order_id=$1 order by i.code"
+      },
+      {
+        "title": "Lots to use first",
+        "sql": "select vb.item,vb.batch,vb.expires_on,vb.on_hand from v_batches vb join v_component_needs n on n.item_id=vb.item_id and n.warehouse_id=vb.warehouse_id where n.production_order_id=$1 and vb.on_hand>0 and not vb.on_hold and (vb.expires_on is null or vb.expires_on>=current_date) order by vb.item,vb.expires_on"
+      }
+    ]
+  },
+  {
+    "name": "batch-trace",
+    "title": "Batch trace record",
+    "for_each": "select b.id,b.code from batches b where exists(select 1 from stock_moves m where m.batch_id=b.id and m.kind in ('delivery','issue'))",
+    "file": "code",
+    "sections": [
+      {
+        "title": "Batch",
+        "note": "One step back and one step forward. Check against your written recall plan.",
+        "sql": "select b.code as batch,i.code as item,i.name,b.made_on,b.expires_on,s.name as supplier,b.supplier_lot,p.code as production_order from batches b join items i on i.id=b.item_id left join partners s on s.id=b.supplier_id left join production_orders p on p.id=b.production_order_id where b.id=$1"
+      },
+      {
+        "title": "Used in production",
+        "sql": "select pr.code as production_order,oi.code as made,ob.code as output_batch,-sum(m.quantity)::numeric(14,3) as quantity_used from stock_moves m join production_orders pr on pr.id=m.production_order_id join batches ob on ob.production_order_id=pr.id join items oi on oi.id=ob.item_id where m.kind='issue' and m.batch_id=$1 group by pr.code,oi.code,ob.code order by pr.code"
+      },
+      {
+        "title": "Shipped to",
+        "sql": "select c.name as customer,c.phone,c.email,o.code as sales_order,-sum(m.quantity)::numeric(14,3) as quantity,min(m.created_at)::date as shipped_on from stock_moves m join order_lines l on l.id=m.line_id join orders o on o.id=l.order_id join partners c on c.id=o.partner_id where m.kind='delivery' and m.batch_id=$1 group by c.name,c.phone,c.email,o.code order by c.name"
+      }
+    ]
+  },
+  {
+    "name": "customer-statement",
+    "title": "Customer statement",
+    "for_each": "select distinct c.id,c.code from partners c join invoices i on i.partner_id=c.id where i.kind='receivable' and i.paid<i.total",
+    "file": "code",
+    "sections": [
+      {
+        "title": "Account",
+        "note": "Balances copied from the accounting ledger. Check before sending.",
+        "sql": "select c.name as customer,current_date as statement_date,c.terms_days as terms_days,(select sum(total-paid) from invoices i where i.partner_id=c.id and i.kind='receivable')::numeric(14,2) as balance,(select currency from settings limit 1) as currency from partners c where c.id=$1"
+      },
+      {
+        "title": "Open invoices",
+        "sql": "select code,issued_on,due_on,total,paid,(total-paid)::numeric(14,2) as outstanding,greatest(current_date-due_on,0) as days_overdue from invoices where partner_id=$1 and kind='receivable' and paid<total order by due_on"
+      }
     ]
   }
 ]

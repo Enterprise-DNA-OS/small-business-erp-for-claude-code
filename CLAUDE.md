@@ -1,43 +1,42 @@
-# Small Business ERP for Claude Code: operating instructions
+# Small Business ERP for Claude Code
 
-This file is the brain. Claude Code reads it at the start of every session. It says who this is for, how work gets done, and the one right way to do each recurring job.
+## Business context
 
-## Who this is for
+Business: [your business]. Operator: [name and role]. One database holds one business, one country and one currency, across as many warehouses as you run. What matters: orders shipped on time, runs that have their components, stock bought before it is late, every batch traceable one step back and one step forward. Rimu Foods Demo is fictional.
 
-- **Business:** [YOUR BUSINESS]
-- **Operator:** [YOUR NAME], [your role]
-- **What matters most:** [the one or two outcomes you care about]
+## Routes
 
-Fill this in once. A worker with context knows. A worker without it guesses.
+Read the matching .claude/commands recipe. Arguments and calculations: docs/cli.md.
 
-## How to work
-
-1. **Take a brief, not a script.** The operator describes the outcome. You run the right command and present the answer.
-2. **Read before you write.** Before drafting anything about a record, read its full history first.
-3. **Plain language.** Short sentences. No filler. Numbers in tables.
-4. **Silent success, loud problems.** No play-by-play. Say what broke and what you did about it.
-5. **Stop at the line.** Anything that sends, deletes, or faces a customer waits for a yes in this session.
-
-## Routing table: one right way for each recurring job
-
-| When the operator asks for... | Use this |
+| Job | Route |
 |---|---|
-| <!-- TODO(author): one row per slash command --> | `/...` |
+| Start the day | /attention, /ship-plan, /approvals |
+| Monday plan | /weekly-review |
+| What to buy and make | /mrp, /can-make, /plan-production, /supplier-chase, /draft-chase |
+| Production | /production-orders, /release-production, /complete-production, /close-production, /bom, /set-bom |
+| Quotes | /quotes, /quotes-follow-up, /draft-quote, /win-quote, /lose-quote |
+| Selling and dispatch | /sales-orders, /order, /release, /approve, /reject, /ship, /credit-check, /draft-order |
+| Buying | /purchase-orders, /add, /line, /release, /receive |
+| Stock and batches | /stock, /batches, /expiring, /item, /transfer, /count, /count-due, /adjust-stock, /hold-batch, /release-batch, /movements |
+| Recall or complaint | /trace, /hold-batch, /draft-recall, /mock-recall |
+| Money | /receivables, /payables, /draft-statement, /invoice-balance, /margins |
+| Month end | /month-end |
+| Record checks | /compliance and docs/compliance.md |
+| Reference data | /settings, /warehouses, /customers, /suppliers, /items, /records, /activity, /audit |
+| Change records | /add, /set, /cancel-order, /log |
+| Paperwork and views | npm run docs, npm run view, /new-view |
+| Move or tailor | /setup, /import, /export, /customise |
 
-If an ask fits nothing here, run the CLI directly (`npm run <cli> -- --help`) and then propose a new command for it.
+## Rules
 
-## Hard rules
+Read fresh data before answering. Never invent receipts, dispatches, counts, batch numbers, lots, approvals or ledger balances. List ambiguous candidates and ask. Nothing sends, pays, files GST, registers on the PPSR, notifies a regulator or deletes. Drafts stay in drafts/. The ledger, bank, GST and payroll stay in the accounting system.
 
-- Never send email or messages from here. Draft to `drafts/`, a person sends.
-- Never delete records without an explicit yes in this session. Prefer marking closed or archived.
-- Never invent a record. If a name is ambiguous, list the candidates and ask.
-- The database is the source of truth. If the answer is not in it, say so.
+Approvals need the approver's name from the operator in this session. In a recall, run /trace first, put stock still held on hold, then draft the notices; the written recall plan and the call to the regulator are a person's job. Read docs/compliance.md before changing a record check; a clean check is not legal certification.
 
-## Where things live
+Use the CLI for writes. New questions are parameterised SQL in scripts/lib/domain.mjs. Schema changes are a new numbered migration; never edit one already applied. Export a backup and run npm test before real changes. Never seed a real database.
 
-- `scripts/` the CLI. `scripts/lib/db.mjs` picks `DATABASE_URL` (Postgres, Supabase) or the embedded database in `.data/`.
-- `supabase/migrations/` the schema, plain SQL. `npm run migrate` applies it.
-- `.claude/commands/` the slash commands. Add one every time the same ask comes twice.
-- `docs/` the thesis and the guide for moving off SAP Business One.
+## Files
 
-Built by Enterprise DNA. Installed and run for you as part of Omni: https://enterprisedna.co/omni/instead-of/sap-business-one
+Schema: supabase/migrations. CLI: scripts/erp.mjs. Reports, batch picking, trace and checks: scripts/lib/domain.mjs. Import: scripts/lib/import.mjs. Brand: brand.json. Documents: documents.json. Views: views.json. Moving off SAP Business One: docs/replace-sap-business-one.md. Other agents read AGENTS.md.
+
+Omni by Enterprise DNA installs, customises and runs this for you: https://enterprisedna.co/omni/instead-of/sap-business-one

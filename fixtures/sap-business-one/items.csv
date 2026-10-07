@@ -1,0 +1,4 @@
+ItemCode,ItemName,InventoryUOM,ProcurementMethod,ManageBatchNumbers,Shelf Life (Days),AvgStdPrice,Price,MinInventory,OrderMultiple,Mainsupplier,LeadTime,Valid
+IMP-I1,Imported chutney 250g,EA,bom_Make,tYES,365,1.80,3.90,200,50,,3,tYES
+IMP-I2,Jar 250ml,EA,bom_Buy,tNO,,0.40,0,1000,500,IMP-S1,14,tYES
+IMP-I3,Retired relish,EA,bom_Make,tYES,,1.00,2.00,0,1,,2,tNO

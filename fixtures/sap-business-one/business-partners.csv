@@ -1,0 +1,5 @@
+CardCode,CardName,CardType,Phone1,EmailAddress,Address,City,FederalTaxID,CreditLimit,Frozen
+IMP-C1,Imported Grocer Ltd,cCustomer,07 555 1001,ap@importedgrocer.example,1 Sample Street,Tauranga,999-888-777,"12,000.00",tNO
+IMP-C2,Dormant Deli,cCustomer,,,,,,0,tYES
+IMP-L1,Maybe Market,cLid,,,,,,0,tNO
+IMP-S1,Imported Jar Co,cSupplier,,orders@jarco.example,,,,0,tNO

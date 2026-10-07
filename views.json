@@ -1,14 +1,32 @@
 [
   {
     "name": "week",
-    "title": "This week",
-    "subtitle": "Small Business ERP for Claude Code: what needs attention, rendered by npm run view",
+    "title": "The week",
+    "subtitle": "What needs a decision, what can ship, and what to buy or make.",
     "sections": [
-      {
-        "title": "Needs attention",
-        "note": "TODO(author): point this at the industry's attention view (overdue, stuck, quiet).",
-        "sql": "select 'replace me' as item, 'TODO(author)' as why"
-      }
+      { "title": "Needs attention", "sql": "select record,code,reason from (select 'order' as record,code,'overdue' as reason,due_on from v_orders where kind in ('sales','purchase') and status='open' and due_on<current_date union all select 'approval',code,approval_note,due_on from v_orders where approval='pending' union all select 'batch',batch||' '||item,case when on_hold then 'on hold' else 'expires '||expires_on end,expires_on from v_batches where on_hand>0 and (on_hold or expires_on<=current_date+30)) x order by due_on" },
+      { "title": "Ship plan", "sql": "select o.code,o.partner as customer,o.due_on,i.code as item,(l.quantity-l.completed)::numeric(14,3) as remaining,(s.on_hand-s.blocked)::numeric(14,3) as available,greatest(l.quantity-l.completed-s.on_hand+s.blocked,0)::numeric(14,3) as short from v_orders o join order_lines l on l.order_id=o.id join items i on i.id=l.item_id join v_stock s on s.item_id=l.item_id and s.warehouse_id=o.warehouse_id where o.kind='sales' and o.status='open' and l.completed<l.quantity order by o.due_on,o.code" },
+      { "title": "Buy and make", "note": "Projected stock below the reorder point after open orders and production.", "sql": "with s as (select item_id,sum(on_hand-blocked) a from v_stock group by item_id), d as (select item_id,sum(remaining) q from v_component_needs group by item_id), so as (select ol.item_id,sum(ol.quantity-ol.completed) q from order_lines ol join orders o on o.id=ol.order_id where o.kind='sales' and o.status='open' group by ol.item_id), inc as (select ol.item_id,sum(ol.quantity-ol.completed) q from order_lines ol join orders o on o.id=ol.order_id where o.kind='purchase' and o.status='open' group by ol.item_id union all select item_id,sum(planned_qty-completed_qty) from production_orders where status in ('planned','released') group by item_id) select i.code,i.name,case when i.kind='made' then 'make' else 'buy' end as action,(s.a+coalesce((select sum(q) from inc where inc.item_id=i.id),0)-coalesce(d.q,0)-coalesce(so.q,0))::numeric(14,3) as projected,i.reorder_point from items i join s on s.item_id=i.id left join d on d.item_id=i.id left join so on so.item_id=i.id where s.a+coalesce((select sum(q) from inc where inc.item_id=i.id),0)-coalesce(d.q,0)-coalesce(so.q,0)<i.reorder_point order by i.code" }
+    ]
+  },
+  {
+    "name": "production",
+    "title": "Production",
+    "subtitle": "Runs in progress and what each one is short of.",
+    "sections": [
+      { "title": "Runs", "sql": "select p.code,i.code as item,p.status,p.due_on,p.planned_qty,p.completed_qty from production_orders p join items i on i.id=p.item_id where p.status in ('planned','released') order by p.due_on" },
+      { "title": "Component shortages", "sql": "select n.production_order,i.code as component,n.remaining as needed,coalesce(s.on_hand-s.blocked,0)::numeric(14,3) as available from v_component_needs n join items i on i.id=n.item_id left join v_stock s on s.item_id=n.item_id and s.warehouse_id=n.warehouse_id where n.remaining>coalesce(s.on_hand-s.blocked,0) order by n.due_on" },
+      { "title": "Batches by expiry", "sql": "select batch,item,warehouse,expires_on,days_left,on_hand,on_hold from v_batches where on_hand>0 order by expires_on nulls last" }
+    ]
+  },
+  {
+    "name": "money",
+    "title": "Money owed",
+    "subtitle": "Amounts from the accounting ledger. Order values exclude GST.",
+    "sections": [
+      { "title": "Customers", "note": "Balances copied from the accounting ledger, not a bank feed.", "sql": "select i.code,c.name as customer,i.due_on,(i.total-i.paid)::numeric(14,2) as outstanding,greatest(current_date-i.due_on,0) as days_overdue from invoices i join partners c on c.id=i.partner_id where i.kind='receivable' and i.paid<i.total order by i.due_on" },
+      { "title": "Over credit", "sql": "select code,name,credit_limit,outstanding,open_orders from v_exposure where outstanding+open_orders>credit_limit order by name" },
+      { "title": "Waiting for approval", "sql": "select code,partner,total,margin_pct,approval_note from v_orders where approval='pending' order by due_on" }
     ]
   }
 ]

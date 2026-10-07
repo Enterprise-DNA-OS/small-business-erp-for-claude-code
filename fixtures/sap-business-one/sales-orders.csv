@@ -1,0 +1,3 @@
+DocNum,CardCode,DocDueDate,NumAtCard,DocStatus,WhsCode
+7001,IMP-C1,20261020,IG-PO-55,O,HAM
+6999,IMP-C1,20260901,IG-PO-41,C,HAM
